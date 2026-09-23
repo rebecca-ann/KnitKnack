@@ -1,8 +1,8 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { cached } from "./cache";
+import { claude } from "./claude";
 import { type SearchFilters, YARN_WEIGHTS } from "./filters";
 import { type PatternCategory, getPatternCategories } from "./ravelry-client";
 
@@ -12,8 +12,6 @@ const MODEL = "claude-haiku-4-5";
 const PARSE_TTL_MS = 60 * 60 * 1000;
 // Bump when the prompt or schema changes so cached parses from the old version aren't reused.
 const PROMPT_VERSION = 3;
-
-let client: Anthropic | undefined;
 
 export class NlParseError extends Error {}
 
@@ -94,8 +92,7 @@ export async function parseNaturalLanguage(text: string): Promise<SearchFilters>
 
   return cached(`nl:v${PROMPT_VERSION}:${normalized}`, PARSE_TTL_MS, async () => {
     const categories = await getPatternCategories();
-    client ??= new Anthropic();
-    const response = await client.messages.parse({
+    const response = await claude().messages.parse({
       model: MODEL,
       max_tokens: 1024,
       system: buildSystemPrompt(categories),

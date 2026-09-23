@@ -37,6 +37,7 @@ export interface ProjectSummary {
   pattern_name?: string | null;
   pattern_id?: number | null;
   status_name?: string;
+  tag_names?: string[];
   user?: { username: string };
   first_photo?: RavelryPhoto | null;
   links?: { self?: { href: string } };
@@ -94,6 +95,34 @@ export function searchProjects(filters: SearchFilters): Promise<ProjectSearchRes
   return cached(`projects:${filtersKey(filters)}`, SEARCH_TTL_MS, () =>
     get("/projects/search.json", toRavelryParams(filters)),
   );
+}
+
+interface CategoryWithParent {
+  permalink: string;
+  parent?: CategoryWithParent;
+}
+
+/**
+ * For each pattern id, the permalinks of its categories and all their ancestors
+ * (e.g. cardigan → sweater → clothing). One batched Ravelry call.
+ */
+export function getPatternCategoryChains(patternIds: number[]): Promise<Map<number, Set<string>>> {
+  const ids = [...new Set(patternIds)].sort((a, b) => a - b);
+  if (!ids.length) return Promise.resolve(new Map());
+  return cached(`pattern-cats:${ids.join("+")}`, CATEGORIES_TTL_MS, async () => {
+    const { patterns } = await get<{
+      patterns: Record<string, { id: number; pattern_categories?: CategoryWithParent[] }>;
+    }>("/patterns.json", new URLSearchParams({ ids: ids.join(" ") }));
+    const out = new Map<number, Set<string>>();
+    for (const p of Object.values(patterns)) {
+      const chain = new Set<string>();
+      for (const c of p.pattern_categories ?? []) {
+        for (let node: CategoryWithParent | undefined = c; node; node = node.parent) chain.add(node.permalink);
+      }
+      out.set(p.id, chain);
+    }
+    return out;
+  });
 }
 
 interface RawCategory {

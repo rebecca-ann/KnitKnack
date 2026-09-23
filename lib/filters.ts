@@ -64,6 +64,48 @@ export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   return params;
 }
 
+// --- App URL format (used by the UI and our /api/search/* routes, not by Ravelry) ---
+// ?q=raglan&weight=dk&weight=worsted&category=pullover&yardMin=800&yardMax=1500&page=2
+
+export function toQueryString(filters: SearchFilters): string {
+  const params = new URLSearchParams();
+  if (filters.query?.trim()) params.set("q", filters.query.trim());
+  filters.weights?.forEach((w) => params.append("weight", w));
+  filters.categories?.forEach((c) => params.append("category", c));
+  if (filters.yardage?.min !== undefined) params.set("yardMin", String(filters.yardage.min));
+  if (filters.yardage?.max !== undefined) params.set("yardMax", String(filters.yardage.max));
+  if (filters.page && filters.page > 1) params.set("page", String(filters.page));
+  return params.toString();
+}
+
+function parseNonNegativeInt(value: string | null): number | undefined {
+  if (value === null || value.trim() === "") return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/**
+ * Parses the app URL format into SearchFilters. Unknown weights are dropped; category
+ * permalinks are not validated here (the list comes from Ravelry at runtime).
+ */
+export function fromQueryString(params: URLSearchParams): SearchFilters {
+  const weights = params
+    .getAll("weight")
+    .filter((w): w is YarnWeight => (YARN_WEIGHTS as readonly string[]).includes(w));
+  const categories = params.getAll("category").filter(Boolean);
+  const min = parseNonNegativeInt(params.get("yardMin"));
+  const max = parseNonNegativeInt(params.get("yardMax"));
+  const page = parseNonNegativeInt(params.get("page"));
+
+  return {
+    query: params.get("q")?.trim() || undefined,
+    weights: weights.length ? weights : undefined,
+    categories: categories.length ? categories : undefined,
+    yardage: min !== undefined || max !== undefined ? { min, max } : undefined,
+    page: page && page > 0 ? page : undefined,
+  };
+}
+
 /** Stable cache key: same filters (regardless of property/array order) → same key. */
 export function filtersKey(filters: SearchFilters): string {
   const params = toRavelryParams({

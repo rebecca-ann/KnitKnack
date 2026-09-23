@@ -43,12 +43,21 @@ for full background and rationale — this file is working memory for ongoing de
 - Recommendations (was floated early on, deferred to a real future MVP phase)
 
 ## Current status
-Day 1 in progress (2026-09-23):
-- Done: Next.js 16 (App Router, TS, no Tailwind) scaffolded; `lib/filters.ts` (SearchFilters,
+Day 1 complete (2026-09-23):
+- Next.js 16 (App Router, TS, no Tailwind) scaffolded; `lib/filters.ts` (SearchFilters,
   `toRavelryParams`, `filtersKey`, `loosen`); `lib/ravelry-client.ts` (patterns + projects search);
-  `GET /api/search/patterns` runs a hardcoded smoke-test filter.
-- Next: create Ravelry app, fill `.env.local` (see `.env.example`), confirm `/api/search/patterns`
-  returns real results; verify Ravelry param names (`weight`, `pc`, `yardage`) against live responses.
+  `GET /api/search/patterns` runs a hardcoded smoke-test filter and returns live results.
+- Next: Day 2 — filter UI → API routes → results for patterns and projects; in-memory cache.
+
+## Ravelry API findings (verified against live API)
+- `weight` and `pc` (pattern category) work; `|` ORs multiple values.
+- Unknown `weight`/`pc` values → Ravelry returns HTTP 500. UI/NL parser must only emit known permalinks.
+- `yardage` is `min|max` (not `min-max`, which is silently ignored) and matches patterns whose
+  yardage range (smallest→largest size) overlaps. Open upper bound (`800|`) returns patterns with
+  no yardage, so always send both ends.
+- Search result `results` count caps at 100000.
+- Search results don't include yardage/weight; `/patterns.json?ids=a+b` returns full details.
+- Credentials must be the Basic Auth app's generated username/password, not the account login (→ 403).
 
 ## Decisions made during build
 - Ravelry auth uses a read-only "Basic Auth" app (username/password) instead of OAuth — sufficient
@@ -57,6 +66,9 @@ Day 1 in progress (2026-09-23):
   before writing Next-specific code.
 - Node 24 LTS installed via winget at `C:\Program Files\nodejs` (Git Bash may need it prepended to
   PATH until the terminal is restarted).
+- Git: this repo is configured (local git config) to commit and push as `rebecca-ann-ai` via the
+  `gh` credential helper. The global identity is `rebecca-ann`; don't change it.
+- Commits should be small and atomic.
 
 ## Update this file as the project progresses
 When a build step from HANDOFF.md's schedule is completed, or a new architectural

@@ -241,3 +241,39 @@ section[aria-busy="true"] .grid {
   opacity: 0.4;
   cursor: default;
 }
+
+.toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.toggle small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.recovered {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+.recovered h2 {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.note {
+  font-size: 0.8rem;
+  color: var(--accent);
+}

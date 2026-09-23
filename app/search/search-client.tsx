@@ -10,13 +10,19 @@ import type {
   ProjectSummary,
   RavelryPhoto,
 } from "@/lib/ravelry-client";
+import type { RecoveredProject } from "@/lib/enhanced-project-search";
 import styles from "./search.module.css";
 
 export type SearchKind = "patterns" | "projects";
 
 export type SearchResults =
   | { kind: "patterns"; patterns: PatternSummary[]; paginator: Paginator }
-  | { kind: "projects"; projects: ProjectSummary[]; paginator: Paginator };
+  | {
+      kind: "projects";
+      projects: ProjectSummary[];
+      paginator: Paginator;
+      enhanced?: { recovered: RecoveredProject[]; candidatesReviewed: number } | { skipped: string };
+    };
 
 interface Props {
   categories: PatternCategory[];
@@ -72,12 +78,15 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
   const [error, setError] = useState<string | null>(null);
   const [nlText, setNlText] = useState("");
   const [parsing, setParsing] = useState(false);
+  // Enhanced project search: opt-in per session, never persisted in the URL (it adds API cost).
+  const [enhanced, setEnhanced] = useState(false);
 
-  async function runSearch(searchKind: SearchKind, filters: SearchFilters) {
+  async function runSearch(searchKind: SearchKind, filters: SearchFilters, withEnhanced = enhanced) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/search/${searchKind}?${toQueryString(filters)}`);
+      const extra = searchKind === "projects" && withEnhanced ? "&enhanced=1" : "";
+      const res = await fetch(`/api/search/${searchKind}?${toQueryString(filters)}${extra}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `Search failed (${res.status})`);
       setResults({ kind: searchKind, ...body });
@@ -127,6 +136,11 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
     if (next === kind) return;
     setKind(next);
     if (results) runSearch(next, { ...activeFilters, page: 1 });
+  }
+
+  function toggleEnhanced(on: boolean) {
+    setEnhanced(on);
+    if (results?.kind === "projects") runSearch("projects", { ...activeFilters, page: 1 }, on);
   }
 
   function goToPage(page: number) {
@@ -228,8 +242,18 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
           ))}
         </fieldset>
 
+        {kind === "projects" && (
+          <label className={styles.toggle}>
+            <input type="checkbox" checked={enhanced} onChange={(e) => toggleEnhanced(e.target.checked)} />
+            <span>
+              Enhanced: also find projects filed under the wrong category
+              <small>Needs a category. Uses Claude; takes ~10 s per search.</small>
+            </span>
+          </label>
+        )}
+
         <button type="submit" className={styles.submit} disabled={loading}>
-          {loading ? "Searching…" : "Search"}
+          {loading ? (kind === "projects" && enhanced ? "Searching (enhanced)…" : "Searching…") : "Search"}
         </button>
       </form>
 
@@ -254,19 +278,31 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
                     subtitle={[p.designer?.name, p.free ? "Free" : null].filter(Boolean).join(" · ")}
                   />
                 ))
-              : results.projects.map((p) => (
-                  <ResultCard
-                    key={p.id}
-                    href={
-                      p.links?.self?.href ??
-                      `https://www.ravelry.com/projects/${p.user?.username}/${p.permalink}`
-                    }
-                    photo={p.first_photo}
-                    title={p.name}
-                    subtitle={[p.pattern_name, p.user?.username, p.status_name].filter(Boolean).join(" · ")}
-                  />
-                ))}
+              : results.projects.map((p) => <ProjectCard key={p.id} project={p} />)}
           </ul>
+
+          {results.kind === "projects" && results.enhanced && (
+            <div className={styles.recovered}>
+              {"skipped" in results.enhanced ? (
+                <p className={styles.summary}>Enhanced search skipped: {results.enhanced.skipped}</p>
+              ) : (
+                <>
+                  <h2>Loosely matched</h2>
+                  <p className={styles.summary}>
+                    Filed under a different category (or none) on Ravelry, but Claude judged them a match.{" "}
+                    {results.enhanced.recovered.length} of {results.enhanced.candidatesReviewed} reviewed.
+                  </p>
+                  {results.enhanced.recovered.length > 0 && (
+                    <ul className={styles.grid}>
+                      {results.enhanced.recovered.map((r) => (
+                        <ProjectCard key={r.project.id} project={r.project} note={r.reason} />
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <nav className={styles.pager}>
             <button disabled={loading || paginator.page <= 1} onClick={() => goToPage(paginator.page - 1)}>
@@ -285,7 +321,25 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
   );
 }
 
-function ResultCard(props: { href: string; photo?: RavelryPhoto | null; title: string; subtitle: string }) {
+function ProjectCard({ project: p, note }: { project: ProjectSummary; note?: string }) {
+  return (
+    <ResultCard
+      href={p.links?.self?.href ?? `https://www.ravelry.com/projects/${p.user?.username}/${p.permalink}`}
+      photo={p.first_photo}
+      title={p.name}
+      subtitle={[p.pattern_name, p.user?.username, p.status_name].filter(Boolean).join(" · ")}
+      note={note}
+    />
+  );
+}
+
+function ResultCard(props: {
+  href: string;
+  photo?: RavelryPhoto | null;
+  title: string;
+  subtitle: string;
+  note?: string;
+}) {
   const src = props.photo?.medium_url ?? props.photo?.small_url;
   return (
     <li className={styles.card}>
@@ -296,6 +350,7 @@ function ResultCard(props: { href: string; photo?: RavelryPhoto | null; title: s
         <div className={styles.cardText}>
           <strong>{props.title}</strong>
           {props.subtitle && <span>{props.subtitle}</span>}
+          {props.note && <em className={styles.note}>{props.note}</em>}
         </div>
       </a>
     </li>

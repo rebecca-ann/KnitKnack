@@ -80,6 +80,7 @@ async function get<T>(path: string, params: URLSearchParams): Promise<T> {
 }
 
 const SEARCH_TTL_MS = 10 * 60 * 1000;
+const CATEGORIES_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function searchPatterns(filters: SearchFilters): Promise<PatternSearchResponse> {
   return cached(`patterns:${filtersKey(filters)}`, SEARCH_TTL_MS, () =>
@@ -91,4 +92,34 @@ export function searchProjects(filters: SearchFilters): Promise<ProjectSearchRes
   return cached(`projects:${filtersKey(filters)}`, SEARCH_TTL_MS, () =>
     get("/projects/search.json", toRavelryParams(filters)),
   );
+}
+
+interface RawCategory {
+  name: string;
+  permalink: string;
+  children?: RawCategory[];
+}
+
+export interface PatternCategory {
+  permalink: string;
+  name: string;
+  /** 0 = top level (e.g. "clothing"); children follow their parent in list order. */
+  depth: number;
+}
+
+/** Ravelry's pattern category tree, flattened depth-first (root node omitted). */
+export function getPatternCategories(): Promise<PatternCategory[]> {
+  return cached("pattern-categories", CATEGORIES_TTL_MS, async () => {
+    const { pattern_categories: root } = await get<{ pattern_categories: RawCategory }>(
+      "/pattern_categories/list.json",
+      new URLSearchParams(),
+    );
+    const out: PatternCategory[] = [];
+    const walk = (c: RawCategory, depth: number) => {
+      out.push({ permalink: c.permalink, name: c.name, depth });
+      c.children?.forEach((child) => walk(child, depth + 1));
+    };
+    root.children?.forEach((c) => walk(c, 0));
+    return out;
+  });
 }

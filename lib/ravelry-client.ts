@@ -1,5 +1,6 @@
 import "server-only";
-import { type SearchFilters, toRavelryParams } from "./filters";
+import { cached } from "./cache";
+import { type SearchFilters, filtersKey, toRavelryParams } from "./filters";
 
 // Thin typed wrapper over Ravelry's read-only search endpoints.
 // Auth: a Ravelry "Basic Auth" (read-only) app's username/password, from .env.local.
@@ -78,10 +79,16 @@ async function get<T>(path: string, params: URLSearchParams): Promise<T> {
   return (await res.json()) as T;
 }
 
+const SEARCH_TTL_MS = 10 * 60 * 1000;
+
 export function searchPatterns(filters: SearchFilters): Promise<PatternSearchResponse> {
-  return get("/patterns/search.json", toRavelryParams(filters));
+  return cached(`patterns:${filtersKey(filters)}`, SEARCH_TTL_MS, () =>
+    get("/patterns/search.json", toRavelryParams(filters)),
+  );
 }
 
 export function searchProjects(filters: SearchFilters): Promise<ProjectSearchResponse> {
-  return get("/projects/search.json", toRavelryParams(filters));
+  return cached(`projects:${filtersKey(filters)}`, SEARCH_TTL_MS, () =>
+    get("/projects/search.json", toRavelryParams(filters)),
+  );
 }

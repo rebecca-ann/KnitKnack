@@ -110,6 +110,9 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `Couldn't interpret search (${res.status})`);
+      if (Object.values(body.filters).every((v) => v === undefined || v === null)) {
+        throw new Error("Nothing specific to search on. Try naming an item, a yarn weight, or an amount of yarn.");
+      }
       const next = toFormState(body.filters);
       setForm(next);
       await runSearch(kind, toFilters(next, 1));

@@ -10,6 +10,8 @@ import { type PatternCategory, getPatternCategories } from "./ravelry-client";
 
 const MODEL = "claude-haiku-4-5";
 const PARSE_TTL_MS = 60 * 60 * 1000;
+// Bump when the prompt or schema changes so cached parses from the old version aren't reused.
+const PROMPT_VERSION = 3;
 
 let client: Anthropic | undefined;
 
@@ -23,10 +25,44 @@ function buildSchema(categories: PatternCategory[]) {
       .nullable()
       .describe("Leftover descriptive words not captured by other fields, e.g. 'raglan cabled'. Null if none."),
     weights: z.array(z.enum(YARN_WEIGHTS)).describe("Yarn weights mentioned or clearly implied. Empty if none."),
-    categories: z.array(z.enum(permalinks)).describe("Most specific matching category permalinks. Empty if none."),
-    yardage_min: z.number().int().nullable().describe("Minimum total yardage, in yards. Null if unspecified."),
-    yardage_max: z.number().int().nullable().describe("Maximum total yardage, in yards. Null if unspecified."),
+    categories: z.array(z.enum(permalinks)).describe("Matching category permalinks. Empty if none."),
+    // The model reports the amount as stated; unit conversion and "around" widening happen in code.
+    yarn_amount: z
+      .object({
+        bound: z.enum(["at_most", "at_least", "around", "between"]),
+        amount: z.number().describe("Total length. For 'between', the lower end."),
+        amount_upper: z.number().nullable().describe("Upper end for 'between'; otherwise null."),
+        unit: z.enum(["yards", "meters"]),
+      })
+      .nullable()
+      .describe("Total yarn length mentioned. Null if none."),
   });
+}
+
+const YARDS_PER_METER = 1.0936;
+const AROUND_TOLERANCE = 0.15;
+
+type YarnAmount = z.infer<ReturnType<typeof buildSchema>>["yarn_amount"];
+
+function toYardage(a: YarnAmount): SearchFilters["yardage"] {
+  if (!a) return undefined;
+  const toYards = (n: number) => Math.round(a.unit === "meters" ? n * YARDS_PER_METER : n);
+  const amount = toYards(a.amount);
+  switch (a.bound) {
+    case "at_most":
+      return { max: amount };
+    case "at_least":
+      return { min: amount };
+    case "around":
+      return {
+        min: Math.round(amount * (1 - AROUND_TOLERANCE)),
+        max: Math.round(amount * (1 + AROUND_TOLERANCE)),
+      };
+    case "between": {
+      const upper = a.amount_upper === null ? amount : toYards(a.amount_upper);
+      return { min: Math.min(amount, upper), max: Math.max(amount, upper) };
+    }
+  }
 }
 
 function buildSystemPrompt(categories: PatternCategory[]): string {
@@ -38,9 +74,15 @@ function buildSystemPrompt(categories: PatternCategory[]): string {
 Rules:
 - Only set a filter when the text states or clearly implies it. Leave everything else empty/null — an over-constrained search returns nothing.
 - Yarn weights: map common synonyms (e.g. "8 ply" → dk, "10 ply" → worsted, "4 ply" → fingering, "chunky" → bulky, "sock yarn" → fingering). A range like "sport to worsted" means each weight in between.
-- Categories: pick the most specific category that fits ("sweater with buttons" → cardigan; "sweater" alone → sweater). Only use permalinks from the list below.
-- Yardage is the total yarn amount, in yards. Convert meters (1 m = 1.094 yd). If the text gives skeins/balls with a per-skein length, multiply. "Under 500 yards" → max 500; "at least 1000" → min 1000; "around 800" → roughly ±15%. Descriptions like "quick" or "stash-buster" are not yardage — ignore them for yardage.
-- Put remaining meaningful descriptors (construction, stitch, style, e.g. "raglan", "cabled", "top-down", "colorwork") in keywords. Drop filler words and anything already captured by another field.
+- Categories: only for the kind of item being made. Match the level of detail the text gives: "sweater with buttons" → cardigan, but "sweater" → sweater and "socks" → socks (not a sock subtype). Adjectives are never categories ("cozy" describes a feeling; the cozy category is for tea/egg cozies). Only use permalinks from the list below.
+- Yarn amount: report it as stated, in its original unit; don't convert. "Under 500 yards" → at_most 500; "at least 1000 m" → at_least 1000 meters; "around 800" → around 800. Yarn the knitter already has ("2 skeins of 400 yd", "one 450 m ball") is an upper limit: at_most the total (multiply skeins by length per skein). A skein count with no length ("one skein") is unknown — set null.
+- Keywords: keep words that describe the item itself — construction, stitch, style, audience (e.g. "raglan", "cabled", "top-down", "colorwork", "baby", "men's"). Drop filler, subjective or speed/effort words ("quick", "easy", "cozy", "nice"), yarn-amount phrases, and anything already captured by another field.
+
+Examples:
+- "something cozy" → no category, no keywords (vague: nothing to filter on)
+- "cozy chunky blanket" → categories [blanket], weights [bulky], no keywords
+- "tea cozy" → categories [cozy]
+- "easy colorwork mittens for kids, at most 300 m" → categories [mittens], keywords "colorwork kids", yarn_amount at_most 300 meters
 
 Categories (indentation shows the hierarchy; parents include their children):
 ${categoryLines}`;
@@ -50,7 +92,7 @@ export async function parseNaturalLanguage(text: string): Promise<SearchFilters>
   const normalized = text.trim().replace(/\s+/g, " ").toLowerCase();
   if (!normalized) throw new NlParseError("Search text is empty");
 
-  return cached(`nl:${normalized}`, PARSE_TTL_MS, async () => {
+  return cached(`nl:v${PROMPT_VERSION}:${normalized}`, PARSE_TTL_MS, async () => {
     const categories = await getPatternCategories();
     client ??= new Anthropic();
     const response = await client.messages.parse({
@@ -66,15 +108,11 @@ export async function parseNaturalLanguage(text: string): Promise<SearchFilters>
       throw new NlParseError(`Could not interpret the search (stop reason: ${response.stop_reason})`);
     }
 
-    // Guard against a flipped range rather than sending Ravelry an empty one.
-    let [min, max] = [out.yardage_min ?? undefined, out.yardage_max ?? undefined];
-    if (min !== undefined && max !== undefined && min > max) [min, max] = [max, min];
-
     return {
       query: out.keywords?.trim() || undefined,
       weights: out.weights.length ? [...new Set(out.weights)] : undefined,
       categories: out.categories.length ? [...new Set(out.categories)] : undefined,
-      yardage: min !== undefined || max !== undefined ? { min, max } : undefined,
+      yardage: toYardage(out.yarn_amount),
     };
   });
 }

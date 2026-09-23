@@ -9,9 +9,9 @@ import type { ProjectSummary } from "./ravelry-client";
 // (miscategorized or uncategorized) and keeps the ones that really are that kind of item.
 // Text-only (name, pattern name, tags) — photo/style judging is out of scope (see CLAUDE.md).
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = "claude-sonnet-5";
 const RERANK_TTL_MS = 60 * 60 * 1000;
-const PROMPT_VERSION = 3;
+const PROMPT_VERSION = 4;
 
 export interface RerankTarget {
   /** Display names of the requested categories, e.g. ["Cardigan"]. */

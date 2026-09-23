@@ -68,7 +68,25 @@ Day 3 complete (2026-09-23):
   then searches through the normal path, so NL and manual search share one `SearchFilters` path.
 - Known limits: the form holds one category, so multi-category parses ("hat or cowl") keep only the
   first; keywords sometimes repeat the category word (harmless).
-- Next: Day 4 stretch — enhanced project search toggle (Query B via `loosen()` + Claude re-rank).
+
+Day 4 complete (2026-09-23) — enhanced project search:
+- Opt-in only: "Enhanced" checkbox on the Projects tab → `GET /api/search/projects?enhanced=1`.
+  Not persisted in the URL. Skipped (with a message) when no category is set.
+- `lib/enhanced-project-search.ts`: Query A (normal) and Query B (`loosen()`: category → category
+  names as OR'd text, page size 100) in parallel. Candidates = B minus A, minus projects whose
+  linked pattern is already in the target category (`getPatternCategoryChains`, 1 batched call).
+  Without that step, ~19/22 of B-only results were correctly filed projects from later A pages.
+- `lib/reranker.ts`: Claude **Sonnet 5** (user's choice after a side-by-side; Haiku let through
+  scarves as shawls, a scarflet as a hat) judges candidates from name/pattern name/tags only
+  (project notes need a per-project call, so they aren't used). Returns reasons; only ids that
+  were sent are accepted back. Re-rank failure degrades to plain results. ~6–12 s uncached.
+- Recovered projects are shown in a separate "Loosely matched" section with Claude's reason.
+- `lib/claude.ts`: shared lazy Anthropic client.
+
+## Ravelry text query syntax (verified)
+- Words are ANDed; `|` (or `OR`) ORs adjacent terms and binds tighter:
+  `raglan coat|jacket` = raglan AND (coat OR jacket).
+- `page_size` up to at least 200 is accepted for project search.
 
 ## Ravelry API findings (verified against live API)
 - `weight` and `pc` (pattern category) work; `|` ORs multiple values.

@@ -36,8 +36,10 @@ export interface ProjectSummary {
   permalink: string;
   pattern_name?: string | null;
   pattern_id?: number | null;
+  status_name?: string;
   user?: { username: string };
   first_photo?: RavelryPhoto | null;
+  links?: { self?: { href: string } };
 }
 
 export interface PatternSearchResponse {

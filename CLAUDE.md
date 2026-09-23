@@ -57,7 +57,18 @@ Day 2 complete (2026-09-23):
 - `/search` page: tabs (patterns/projects), keywords, category select (from Ravelry's tree), yardage
   min/max, weight chips, results grid, prev/next paging. URL-synced; a loaded URL renders server-side.
   UI picks one category, though `SearchFilters.categories` supports several.
-- Next: Day 3 — NL parser (`lib/nl-parser.ts`, Claude → SearchFilters) wired into pattern search.
+
+Day 3 complete (2026-09-23):
+- `lib/nl-parser.ts`: Claude Haiku 4.5 (`claude-haiku-4-5`, user's choice for cost/latency) +
+  structured outputs (`messages.parse` + Zod). Categories constrained by a schema enum of Ravelry
+  permalinks. The model reports yarn amount as stated (bound/amount/unit); meters→yards and the ±15%
+  "around" range are computed in code, because the model's arithmetic was unreliable. Cached 1 h;
+  bump `PROMPT_VERSION` when changing prompt/schema. ~1–2 s per uncached parse.
+- `POST /api/parse` `{ text }` → `{ filters }`. The UI's NL box fills the manual form from the result,
+  then searches through the normal path, so NL and manual search share one `SearchFilters` path.
+- Known limits: the form holds one category, so multi-category parses ("hat or cowl") keep only the
+  first; keywords sometimes repeat the category word (harmless).
+- Next: Day 4 stretch — enhanced project search toggle (Query B via `loosen()` + Claude re-rank).
 
 ## Ravelry API findings (verified against live API)
 - `weight` and `pc` (pattern category) work; `|` ORs multiple values.

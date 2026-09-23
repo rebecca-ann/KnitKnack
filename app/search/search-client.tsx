@@ -70,6 +70,8 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
   const [activeFilters, setActiveFilters] = useState<SearchFilters>(initialFilters);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nlText, setNlText] = useState("");
+  const [parsing, setParsing] = useState(false);
 
   async function runSearch(searchKind: SearchKind, filters: SearchFilters) {
     setLoading(true);
@@ -91,6 +93,31 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     runSearch(kind, toFilters(form, 1));
+  }
+
+  // NL text → /api/parse → SearchFilters → form fields → normal search path. The form is
+  // the source of truth, so the user sees (and can tweak) exactly how the text was read.
+  async function onNlSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!nlText.trim()) return;
+    setParsing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: nlText }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `Couldn't interpret search (${res.status})`);
+      const next = toFormState(body.filters);
+      setForm(next);
+      await runSearch(kind, toFilters(next, 1));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setParsing(false);
+    }
   }
 
   function switchKind(next: SearchKind) {
@@ -129,6 +156,20 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
           </button>
         ))}
       </div>
+
+      <form className={styles.nlForm} onSubmit={onNlSubmit}>
+        <input
+          type="search"
+          aria-label="Describe what you're looking for"
+          value={nlText}
+          maxLength={500}
+          placeholder="Describe it, e.g. “men's cabled cardigan in 8 ply, around 1000 m”"
+          onChange={(e) => setNlText(e.target.value)}
+        />
+        <button type="submit" className={styles.submit} disabled={parsing || loading || !nlText.trim()}>
+          {parsing ? "Interpreting…" : "Ask"}
+        </button>
+      </form>
 
       <form className={styles.form} onSubmit={onSubmit}>
         <label className={styles.field}>

@@ -47,7 +47,17 @@ Day 1 complete (2026-09-23):
 - Next.js 16 (App Router, TS, no Tailwind) scaffolded; `lib/filters.ts` (SearchFilters,
   `toRavelryParams`, `filtersKey`, `loosen`); `lib/ravelry-client.ts` (patterns + projects search);
   `GET /api/search/patterns` runs a hardcoded smoke-test filter and returns live results.
-- Next: Day 2 — filter UI → API routes → results for patterns and projects; in-memory cache.
+
+Day 2 complete (2026-09-23):
+- `lib/cache.ts`: `cached(key, ttl, load)` — globalThis Map (survives HMR), shares in-flight loads,
+  doesn't cache failures. Searches cached 10 min, category list 24 h.
+- `GET /api/search/{patterns,projects}` take the app URL format (`lib/filters.ts` `toQueryString` /
+  `fromQueryString`: `q`, `weight`*, `category`*, `yardMin`, `yardMax`, `page`); `GET /api/categories`.
+  `lib/search-request.ts` validates categories against Ravelry's list (400 on unknown).
+- `/search` page: tabs (patterns/projects), keywords, category select (from Ravelry's tree), yardage
+  min/max, weight chips, results grid, prev/next paging. URL-synced; a loaded URL renders server-side.
+  UI picks one category, though `SearchFilters.categories` supports several.
+- Next: Day 3 — NL parser (`lib/nl-parser.ts`, Claude → SearchFilters) wired into pattern search.
 
 ## Ravelry API findings (verified against live API)
 - `weight` and `pc` (pattern category) work; `|` ORs multiple values.

@@ -37,11 +37,12 @@ export interface SearchFilters {
 }
 
 const DEFAULT_PAGE_SIZE = 24;
+const YARDAGE_UPPER_BOUND = 100_000;
 
 /**
  * Converts SearchFilters to Ravelry search query params. Ravelry's API search params
  * mirror the website's search URL params (weight, pc, yardage, ...), with multiple
- * values joined by "|".
+ * values joined by "|". Unknown weight/pc values make Ravelry return a 500.
  */
 export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   const params = new URLSearchParams();
@@ -50,9 +51,12 @@ export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   if (filters.weights?.length) params.set("weight", filters.weights.join("|"));
   if (filters.categories?.length) params.set("pc", filters.categories.join("|"));
 
+  // Ravelry's yardage param is "min|max" and matches patterns whose yardage range
+  // (smallest to largest size) overlaps it. An open upper bound ("800|") returns
+  // patterns with no yardage, so both ends are always sent.
   const { min, max } = filters.yardage ?? {};
   if (min !== undefined || max !== undefined) {
-    params.set("yardage", `${min ?? ""}-${max ?? ""}`);
+    params.set("yardage", `${min ?? 0}|${max ?? YARDAGE_UPPER_BOUND}`);
   }
 
   params.set("page", String(filters.page ?? 1));

@@ -118,9 +118,22 @@ export function filtersKey(filters: SearchFilters): string {
 }
 
 /**
- * Drops the structured filters that users most often mis-tag on projects (category),
- * keeping keywords. Used by the enhanced project search's loosened "Query B" (stretch).
+ * Replaces the category filter — the field users most often mis-tag on projects — with the
+ * category names as free text, keeping everything else. Used by the enhanced project search's
+ * loosened "Query B". Pass the display names of `filters.categories` (e.g. "Coat / Jacket").
+ *
+ * Ravelry's text query ANDs words but `|` ORs adjacent terms and binds tighter, so
+ * "raglan coat|jacket" means raglan AND (coat OR jacket).
  */
-export function loosen(filters: SearchFilters): SearchFilters {
-  return { ...filters, categories: undefined };
+export function loosen(filters: SearchFilters, categoryNames: string[]): SearchFilters {
+  const terms = [
+    ...new Set(
+      categoryNames
+        .flatMap((n) => n.split("/"))
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const query = [filters.query, terms.join("|")].filter(Boolean).join(" ");
+  return { ...filters, categories: undefined, query: query || undefined };
 }

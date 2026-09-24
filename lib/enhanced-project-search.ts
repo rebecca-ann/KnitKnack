@@ -53,7 +53,10 @@ export async function searchProjectsEnhanced(filters: SearchFilters): Promise<En
 
   let matches: Map<number, string>;
   try {
-    matches = await rerankProjects({ categoryNames, keywords: filters.query }, candidates);
+    const keywords = [filters.query, filters.anyKeywords?.length ? `any of: ${filters.anyKeywords.join(", ")}` : ""]
+      .filter(Boolean)
+      .join("; ");
+    matches = await rerankProjects({ categoryNames, keywords: keywords || undefined }, candidates);
   } catch (err) {
     // Degrade to the plain results rather than failing the whole search.
     console.error("Enhanced re-rank failed", err);

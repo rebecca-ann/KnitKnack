@@ -24,8 +24,10 @@ export interface YardageRange {
 }
 
 export interface SearchFilters {
-  /** Free-text keywords passed through to Ravelry's `query` param. */
+  /** Free-text keywords passed through to Ravelry's `query` param; all must match. */
   query?: string;
+  /** Keywords or phrases of which at least one must match (e.g. ["cabled", "twisted stitch"]). */
+  anyKeywords?: string[];
   /** Ravelry yarn weight permalinks; multiple values are OR'd. */
   weights?: YarnWeight[];
   /** Total yardage required. */
@@ -47,7 +49,8 @@ const YARDAGE_UPPER_BOUND = 100_000;
 export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   const params = new URLSearchParams();
 
-  if (filters.query?.trim()) params.set("query", filters.query.trim());
+  const query = [filters.query?.trim(), anyKeywordsQuery(filters.anyKeywords)].filter(Boolean).join(" ");
+  if (query) params.set("query", query);
   if (filters.weights?.length) params.set("weight", filters.weights.join("|"));
   if (filters.categories?.length) params.set("pc", filters.categories.join("|"));
 
@@ -64,12 +67,24 @@ export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   return params;
 }
 
+/**
+ * Ravelry's text query ANDs words, but `|` ORs adjacent terms and binds tighter, and quoted
+ * phrases work inside an OR group: `raglan cabled|"twisted stitch"` means
+ * raglan AND (cabled OR "twisted stitch"). Separate OR groups are ANDed with each other.
+ */
+function anyKeywordsQuery(terms: string[] | undefined): string | undefined {
+  const cleaned = (terms ?? []).map((t) => t.replace(/["|]/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (!cleaned.length) return undefined;
+  return [...new Set(cleaned)].map((t) => (t.includes(" ") ? `"${t}"` : t)).join("|");
+}
+
 // --- App URL format (used by the UI and our /api/search/* routes, not by Ravelry) ---
-// ?q=raglan&weight=dk&weight=worsted&category=pullover&yardMin=800&yardMax=1500&page=2
+// ?q=raglan&any=cabled&any=twisted+stitch&weight=dk&weight=worsted&category=pullover&yardMin=800&yardMax=1500&page=2
 
 export function toQueryString(filters: SearchFilters): string {
   const params = new URLSearchParams();
   if (filters.query?.trim()) params.set("q", filters.query.trim());
+  filters.anyKeywords?.forEach((k) => params.append("any", k));
   filters.weights?.forEach((w) => params.append("weight", w));
   filters.categories?.forEach((c) => params.append("category", c));
   if (filters.yardage?.min !== undefined) params.set("yardMin", String(filters.yardage.min));
@@ -93,12 +108,14 @@ export function fromQueryString(params: URLSearchParams): SearchFilters {
     .getAll("weight")
     .filter((w): w is YarnWeight => (YARN_WEIGHTS as readonly string[]).includes(w));
   const categories = params.getAll("category").filter(Boolean);
+  const anyKeywords = params.getAll("any").map((k) => k.trim()).filter(Boolean);
   const min = parseNonNegativeInt(params.get("yardMin"));
   const max = parseNonNegativeInt(params.get("yardMax"));
   const page = parseNonNegativeInt(params.get("page"));
 
   return {
     query: params.get("q")?.trim() || undefined,
+    anyKeywords: anyKeywords.length ? anyKeywords : undefined,
     weights: weights.length ? weights : undefined,
     categories: categories.length ? categories : undefined,
     yardage: min !== undefined || max !== undefined ? { min, max } : undefined,
@@ -112,6 +129,7 @@ export function filtersKey(filters: SearchFilters): string {
     ...filters,
     weights: filters.weights ? [...filters.weights].sort() : undefined,
     categories: filters.categories ? [...filters.categories].sort() : undefined,
+    anyKeywords: filters.anyKeywords ? [...filters.anyKeywords].sort() : undefined,
   });
   params.sort();
   return params.toString();
@@ -122,8 +140,7 @@ export function filtersKey(filters: SearchFilters): string {
  * category names as free text, keeping everything else. Used by the enhanced project search's
  * loosened "Query B". Pass the display names of `filters.categories` (e.g. "Coat / Jacket").
  *
- * Ravelry's text query ANDs words but `|` ORs adjacent terms and binds tighter, so
- * "raglan coat|jacket" means raglan AND (coat OR jacket).
+ * The category names become their own OR group (see anyKeywordsQuery for the syntax).
  */
 export function loosen(filters: SearchFilters, categoryNames: string[]): SearchFilters {
   const terms = [

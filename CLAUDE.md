@@ -66,8 +66,17 @@ Day 3 complete (2026-09-23):
   bump `PROMPT_VERSION` when changing prompt/schema. ~1–2 s per uncached parse.
 - `POST /api/parse` `{ text }` → `{ filters }`. The UI's NL box fills the manual form from the result,
   then searches through the normal path, so NL and manual search share one `SearchFilters` path.
-- Known limits: the form holds one category, so multi-category parses ("hat or cowl") keep only the
-  first; keywords sometimes repeat the category word (harmless).
+- Known limit: the form holds one category, so multi-category parses ("hat or cowl") keep only the
+  first.
+
+Keyword changes (2026-09-23, after Day 4):
+- `SearchFilters.anyKeywords` (match-any): sent as an OR group in Ravelry's text query
+  (`raglan cabled|"twisted stitch"`; multi-word entries are quoted). App URL: repeated `any=`.
+  Form: "All of these words" (`query`) + "Any of these words" (comma-separated).
+- NL parser (user decision): pull out category/weight/yarn amount first; **everything else except
+  filler goes into keywords** (including subjective words like "cozy", "quick"). Explicit
+  alternatives ("cabled or lace") go to `anyKeywords`. Category/weight words the model repeats in
+  keywords are stripped in code (`stripCapturedWords`), since keywords are ANDed.
 
 Day 4 complete (2026-09-23) — enhanced project search:
 - Opt-in only: "Enhanced" checkbox on the Projects tab → `GET /api/search/projects?enhanced=1`.

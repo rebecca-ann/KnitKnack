@@ -34,6 +34,8 @@ interface Props {
 // Form state keeps raw input strings; SearchFilters is built on submit.
 interface FormState {
   query: string;
+  /** Comma-separated; each entry may be a multi-word phrase. */
+  anyKeywords: string;
   weights: YarnWeight[];
   category: string;
   yardMin: string;
@@ -43,6 +45,7 @@ interface FormState {
 function toFormState(f: SearchFilters): FormState {
   return {
     query: f.query ?? "",
+    anyKeywords: f.anyKeywords?.join(", ") ?? "",
     weights: f.weights ?? [],
     category: f.categories?.[0] ?? "",
     yardMin: f.yardage?.min?.toString() ?? "",
@@ -54,8 +57,13 @@ function toFilters(form: FormState, page: number): SearchFilters {
   const num = (s: string) => (s.trim() === "" ? undefined : Math.max(0, Math.floor(Number(s))));
   const min = num(form.yardMin);
   const max = num(form.yardMax);
+  const anyKeywords = form.anyKeywords
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
   return {
     query: form.query.trim() || undefined,
+    anyKeywords: anyKeywords.length ? anyKeywords : undefined,
     weights: form.weights.length ? form.weights : undefined,
     categories: form.category ? [form.category] : undefined,
     yardage: min !== undefined || max !== undefined ? { min, max } : undefined,
@@ -190,12 +198,22 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
 
       <form className={styles.form} onSubmit={onSubmit}>
         <label className={styles.field}>
-          <span>Keywords</span>
+          <span>All of these words</span>
           <input
             type="search"
             value={form.query}
-            placeholder="e.g. raglan, cabled"
+            placeholder="e.g. raglan top-down"
             onChange={(e) => setForm({ ...form, query: e.target.value })}
+          />
+        </label>
+
+        <label className={styles.field}>
+          <span>Any of these words (comma-separated)</span>
+          <input
+            type="search"
+            value={form.anyKeywords}
+            placeholder="e.g. cabled, lace, twisted stitch"
+            onChange={(e) => setForm({ ...form, anyKeywords: e.target.value })}
           />
         </label>
 

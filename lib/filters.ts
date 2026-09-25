@@ -49,7 +49,7 @@ const YARDAGE_UPPER_BOUND = 100_000;
 export function toRavelryParams(filters: SearchFilters): URLSearchParams {
   const params = new URLSearchParams();
 
-  const query = [filters.query?.trim(), anyKeywordsQuery(filters.anyKeywords)].filter(Boolean).join(" ");
+  const query = [filters.query?.trim(), toOrGroup(filters.anyKeywords)].filter(Boolean).join(" ");
   if (query) params.set("query", query);
   if (filters.weights?.length) params.set("weight", filters.weights.join("|"));
   if (filters.categories?.length) params.set("pc", filters.categories.join("|"));
@@ -72,7 +72,7 @@ export function toRavelryParams(filters: SearchFilters): URLSearchParams {
  * phrases work inside an OR group: `raglan cabled|"twisted stitch"` means
  * raglan AND (cabled OR "twisted stitch"). Separate OR groups are ANDed with each other.
  */
-function anyKeywordsQuery(terms: string[] | undefined): string | undefined {
+export function toOrGroup(terms: string[] | undefined): string | undefined {
   const cleaned = (terms ?? []).map((t) => t.replace(/["|]/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean);
   if (!cleaned.length) return undefined;
   return [...new Set(cleaned)].map((t) => (t.includes(" ") ? `"${t}"` : t)).join("|");
@@ -140,7 +140,7 @@ export function filtersKey(filters: SearchFilters): string {
  * category names as free text, keeping everything else. Used by the enhanced project search's
  * loosened "Query B". Pass the display names of `filters.categories` (e.g. "Coat / Jacket").
  *
- * The category names become their own OR group (see anyKeywordsQuery for the syntax).
+ * The category names become their own OR group (see toOrGroup for the syntax).
  */
 export function loosen(filters: SearchFilters, categoryNames: string[]): SearchFilters {
   const terms = [

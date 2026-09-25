@@ -75,8 +75,14 @@ Keyword changes (2026-09-23, after Day 4):
   Form: "All of these words" (`query`) + "Any of these words" (comma-separated).
 - NL parser (user decision): pull out category/weight/yarn amount first; **everything else except
   filler goes into keywords** (including subjective words like "cozy", "quick"). Explicit
-  alternatives ("cabled or lace") go to `anyKeywords`. Category/weight words the model repeats in
-  keywords are stripped in code (`stripCapturedWords`), since keywords are ANDed.
+  alternatives ("cabled or lace") go to `anyKeywords`.
+- Synonyms (user decision: NL only, strict synonyms only — no related terms like fall→harvest):
+  the parser returns keywords as concepts (`[["fall","autumn"],["cabled"]]`); `keywordsQuery`
+  serializes each concept as an OR group into `query` (`fall|autumn cabled`), shown in the
+  all-words box. Manual searches aren't expanded (no extra Claude call). `keywordsQuery` also drops
+  concepts that repeat a chosen category (incl. ancestors and 4+ letter stems: decor~decorative),
+  a weight, or an any-of alternative, since concepts are ANDed.
+  "fall" + Decorative: 801 patterns; "fall|autumn": 1153.
 
 Day 4 complete (2026-09-23) — enhanced project search:
 - Opt-in only: "Enhanced" checkbox on the Projects tab → `GET /api/search/projects?enhanced=1`.

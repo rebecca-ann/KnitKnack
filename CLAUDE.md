@@ -43,6 +43,28 @@ for full background and rationale — this file is working memory for ongoing de
 - Recommendations (was floated early on, deferred to a real future MVP phase)
 
 ## Current status
+
+### Checkpoint (2026-09-24) — start here
+All 4 days of HANDOFF.md's schedule are done, plus post-schedule keyword/synonym work. `main` is
+pushed and clean (last commit before this checkpoint: 718743e).
+- **Run:** `npm run dev` → http://localhost:3000 (redirects to `/search`). Needs `.env.local`
+  (see `.env.example`): `RAVELRY_USERNAME`/`RAVELRY_PASSWORD` (Basic Auth app creds, not account
+  login) and `ANTHROPIC_API_KEY` (`sk-ant-...`). `next dev` reads `.env.local` only at startup.
+- **Features:** pattern/project search with filter form (all-of + any-of keywords, one category,
+  yardage, weights) → NL "Ask" box (Haiku 4.5) that fills the form, with strict-synonym expansion
+  → opt-in Enhanced project search (loosened Query B + Sonnet 5 re-rank, "Loosely matched" section).
+- **Verification gap:** API routes and the parser/re-ranker were tested live with curl/scripts;
+  the browser UI (Ask, tab switching, paging, Enhanced toggle, any-of field) has never been
+  clicked through. Do that first if touching the UI.
+- **Known limits / candidate next steps (none requested yet):**
+  - Form holds one category; NL multi-category parses ("hat or cowl") keep only the first.
+    A multi-select would fix both (user was asked, hasn't decided).
+  - NL keywords are ANDed, so extra leftover words ("quick") can shrink results.
+  - Re-ranker sees name/pattern name/tags only (notes would need a call per project).
+  - No automated tests.
+- **Model choices are the user's call:** they chose Haiku 4.5 (parser) and Sonnet 5 (re-ranker)
+  after being shown options. Ask before switching models.
+
 Day 1 complete (2026-09-23):
 - Next.js 16 (App Router, TS, no Tailwind) scaffolded; `lib/filters.ts` (SearchFilters,
   `toRavelryParams`, `filtersKey`, `loosen`); `lib/ravelry-client.ts` (patterns + projects search);
@@ -118,8 +140,8 @@ Day 4 complete (2026-09-23) — enhanced project search:
   for single-user local, far less plumbing. Revisit for multi-user MVP.
 - Next.js 16 has breaking changes vs. older versions — see AGENTS.md; read `node_modules/next/dist/docs/`
   before writing Next-specific code.
-- Node 24 LTS installed via winget at `C:\Program Files\nodejs` (Git Bash may need it prepended to
-  PATH until the terminal is restarted).
+- Node 24 LTS installed via winget at `C:\Program Files\nodejs` (should be on PATH after a
+  reboot; if not, prepend it in Git Bash).
 - Git: this repo is configured (local git config) to commit and push as `rebecca-ann-ai` via the
   `gh` credential helper. The global identity is `rebecca-ann`; don't change it.
 - Commits should be small and atomic.

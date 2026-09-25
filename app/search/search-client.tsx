@@ -198,11 +198,11 @@ export default function SearchClient({ categories, initialKind, initialFilters, 
 
       <form className={styles.form} onSubmit={onSubmit}>
         <label className={styles.field}>
-          <span>All of these words</span>
+          <span>All of these words (a|b = either)</span>
           <input
             type="search"
             value={form.query}
-            placeholder="e.g. raglan top-down"
+            placeholder="e.g. raglan fall|autumn"
             onChange={(e) => setForm({ ...form, query: e.target.value })}
           />
         </label>
